@@ -1,0 +1,235 @@
+import os
+import pandas as pd
+from datetime import datetime
+from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+from trade_memory import memory
+from config import GPT_TIMEOUT, GPT_MAX_RETRIES
+
+load_dotenv()
+
+
+class TradingAgent:
+    def __init__(self):
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        self.llm = ChatOpenAI(
+            model="x-ai/grok-4.1-fast",
+            temperature=0,
+            openai_api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            request_timeout=GPT_TIMEOUT,
+            max_retries=GPT_MAX_RETRIES
+        )
+        self.fallback = ChatOpenAI(
+            model="deepseek/deepseek-v3.2",
+            temperature=0,
+            openai_api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            request_timeout=GPT_TIMEOUT,
+            max_retries=1
+        )
+
+    def _summarize(self, raw_data, label):
+        if not raw_data or len(raw_data) == 0:
+            return f"{label}: no data"
+        df = pd.DataFrame(
+            raw_data,
+            columns=['time', 'open', 'high', 'low', 'close',
+                     'tick_v', 'spread', 'real_v']
+        )
+        last = df.iloc[-1]
+        sma5 = df['close'].tail(5).mean()
+        sma15 = df['close'].tail(15).mean()
+        sma50 = df['close'].tail(min(50, len(df))).mean()
+        sma_diff = ((sma5 - sma15) / sma15) * 10000
+        if sma5 > sma15:
+            trend = f"UP (+{sma_diff:.1f}p)"
+        elif sma5 < sma15:
+            trend = f"DOWN ({sma_diff:.1f}p)"
+        else:
+            trend = "FLAT"
+        bullish = sum(1 for _, r in df.tail(5).iterrows() if r['close'] > r['open'])
+        high_20 = df['high'].tail(20).max()
+        low_20 = df['low'].tail(20).min()
+        avg_vol = df['tick_v'].tail(10).mean()
+        last_vol = last['tick_v']
+        vol_ratio = last_vol / avg_vol if avg_vol > 0 else 1.0
+        ema12 = df['close'].ewm(span=12).mean().iloc[-1]
+        ema26 = df['close'].ewm(span=26).mean().iloc[-1]
+        macd = ema12 - ema26
+        macd_signal = "BULLISH" if macd > 0 else "BEARISH"
+        recent_highs = df['high'].tail(20).nlargest(3).mean()
+        recent_lows = df['low'].tail(20).nsmallest(3).mean()
+        p2r = (recent_highs - last['close']) * 10000
+        p2s = (last['close'] - recent_lows) * 10000
+        return (
+            f"-- {label} --\n"
+            f"  Price: {last['close']:.5f} | Trend: {trend}\n"
+            f"  SMA5:{sma5:.5f} SMA15:{sma15:.5f} SMA50:{sma50:.5f}\n"
+            f"  MACD: {macd:.6f} ({macd_signal})\n"
+            f"  Candles(5): {bullish}bull/{5-bullish}bear\n"
+            f"  Resistance: {recent_highs:.5f} ({p2r:.0f}p) | Support: {recent_lows:.5f} ({p2s:.0f}p)\n"
+            f"  Volume: {last_vol:.0f} (x{vol_ratio:.1f})"
+        )
+
+    def _get_session(self):
+        hour = datetime.now().hour
+        if 7 <= hour < 10:
+            return "London Open (high volatility)"
+        elif 10 <= hour < 13:
+            return "London (peak liquidity)"
+        elif 13 <= hour < 17:
+            return "London+NY (maximum activity)"
+        elif 17 <= hour < 21:
+            return "New York (moderate)"
+        else:
+            return "Asia/Closed (low activity)"
+
+    def _calculate_atr(self, raw_data, period=14):
+        if not raw_data or len(raw_data) < period + 1:
+            return 0.0010
+        df = pd.DataFrame(
+            raw_data,
+            columns=['time', 'open', 'high', 'low', 'close',
+                     'tick_v', 'spread', 'real_v']
+        )
+        df['h_l'] = df['high'] - df['low']
+        df['h_pc'] = abs(df['high'] - df['close'].shift(1))
+        df['l_pc'] = abs(df['low'] - df['close'].shift(1))
+        df['tr'] = df[['h_l', 'h_pc', 'l_pc']].max(axis=1)
+        return df['tr'].rolling(window=period).mean().iloc[-1]
+
+    def analyze_market(self, data_m15, data_h1, data_h4, rsi, price,
+                       positions, external_signals=None, spread=0):
+        summary_m15 = self._summarize(data_m15, "M15")
+        summary_h1 = self._summarize(data_h1, "H1")
+        summary_h4 = self._summarize(data_h4, "H4")
+        atr = self._calculate_atr(data_m15)
+        session = self._get_session()
+        weekday = datetime.now().strftime("%A")
+        current_time = datetime.now().strftime("%H:%M")
+        pos_count = len(positions) if positions else 0
+        perf_summary = memory.get_performance_summary(last_n=20)
+        last_trades = memory.get_last_trades_for_prompt(n=5)
+        ext_block = "None."
+        if external_signals and len(external_signals) > 0:
+            lines = []
+            for sig in external_signals:
+                lines.append(
+                    f"  [{sig['source']}] {sig['direction']} "
+                    f"Conf:{sig.get('confidence', '?')}"
+                )
+            ext_block = "\n".join(lines)
+        try:
+            from correlation_analyzer import correlator
+            corr_summary, _, _, _ = correlator.analyze()
+        except Exception:
+            corr_summary = "Unavailable"
+        try:
+            from signal_engine import signals
+            tech_summary, _, _ = signals.analyze_all()
+        except Exception:
+            tech_summary = "Unavailable"
+        try:
+            from sentiment_analyzer import sentiment
+            sent_summary = sentiment.get_sentiment_summary()
+        except Exception:
+            sent_summary = "No news data"
+
+        prompt = f"""You are a senior quantitative risk manager at an algorithmic fund.
+Pair: EURUSD. Give a precise trading signal based on ALL data below.
+
+=== CONTEXT ===
+Time: {current_time} ({weekday}) | Session: {session}
+Price: {price:.5f} | Spread: {spread:.1f}p
+ATR(14): {atr:.6f} | RSI(14): {rsi:.1f}
+Open positions: {pos_count}
+
+=== MULTI-TIMEFRAME ANALYSIS ===
+{summary_h4}
+
+{summary_h1}
+
+{summary_m15}
+
+=== TECHNICAL SIGNALS (8 indicators + ADX) ===
+{tech_summary}
+
+=== CORRELATIONS (4 instruments) ===
+{corr_summary}
+
+=== NEWS SENTIMENT ===
+{sent_summary}
+
+=== EXTERNAL SIGNALS ===
+{ext_block}
+
+=== TRADE HISTORY (SELF-LEARNING) ===
+{perf_summary}
+
+Last 5 trades:
+{last_trades}
+
+=== DECISION RULES (STRICT) ===
+1. MULTI-TF: Enter ONLY if H4+H1 align. M15 confirms timing.
+2. MACD must confirm (BULLISH=BUY, BEARISH=SELL).
+3. RSI: >70=NO BUY, <30=NO SELL, 40-60=neutral.
+4. LEVELS: No entry within 5p of support/resistance.
+5. DIVERGENCE: RSI divergence is a STRONG signal - weight heavily.
+6. GOLDEN/DEATH CROSS: Very strong signal on H4.
+7. BOLLINGER: Price at band = potential reversal.
+8. VOLUME: Low volume = reduce confidence. Spike = confirms move.
+9. PATTERNS: Engulfing/Hammer/Star = reversal signals.
+10. ADX: <20 = NO TRADE (no trend). >25 = trend confirmed.
+11. SPREAD: >2.5p = reduce confidence by 1.
+12. SESSION: Asia/after 20:00 = -2 confidence.
+13. FRIDAY after 18:00 = NO trades.
+14. HISTORY: 3+ consecutive losses = WAIT or confidence 9+ only.
+15. If BUY losing in history = avoid BUY, same for SELL.
+16. CORRELATIONS: Confirm=+1 confidence, Contradict=-2 confidence.
+17. NEWS SENTIMENT: If strongly against signal = -2 confidence.
+18. No new positions if {pos_count} >= 1.
+
+=== ANSWER FORMAT (EXACT) ===
+ЛОГИКА: [2-3 sentences: what confirms, what contradicts]
+УВЕРЕННОСТЬ: [1-10]
+СИГНАЛ: [BUY or SELL or WAIT]
+"""
+        for model_name, llm in [("Grok-4.1-Fast", self.llm), ("DeepSeek-V3.2", self.fallback)]:
+            try:
+                response = llm.invoke(prompt)
+                print(f"  [AI] {model_name} responded OK")
+                return response.content, atr, session
+            except Exception as e:
+                print(f"  [AI] {model_name} failed: {e}")
+                continue
+
+        return (
+            f"Error: All models failed\nЛОГИКА: API error\n"
+            f"УВЕРЕННОСТЬ: 0\nСИГНАЛ: WAIT",
+            atr, session
+        )
+
+    def parse_response(self, analysis):
+        confidence = 0
+        direction = "WAIT"
+        logic = ""
+        for line in analysis.split('\n'):
+            up = line.upper().strip()
+            if "УВЕРЕННОСТЬ:" in up or "CONFIDENCE:" in up:
+                digits = ''.join(filter(str.isdigit, line))
+                if digits:
+                    confidence = min(int(digits), 10)
+            if "СИГНАЛ:" in up or "SIGNAL:" in up:
+                if "BUY" in up:
+                    direction = "BUY"
+                elif "SELL" in up:
+                    direction = "SELL"
+                else:
+                    direction = "WAIT"
+            if "ЛОГИКА:" in up or "LOGIC:" in up:
+                logic = line.split(":", 1)[1].strip() if ":" in line else ""
+        return confidence, direction, logic
+
+
+agent = TradingAgent()

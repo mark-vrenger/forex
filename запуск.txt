@@ -1,0 +1,10 @@
+Bash
+cd Desktop/ii
+Войди в окружение Wine:
+
+Bash
+wine cmd
+Запусти бота:
+
+DOS
+python pro_auto_trade_pc.py
