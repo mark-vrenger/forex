@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="5">
+  <title>Тренер | 3865/97420 | 2022-05-03 13:45 | AI:1339 skip:1521</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg:      #0d0d0d;
+      --panel:   #141414;
+      --border:  #222;
+      --green:   #00ff88;
+      --red:     #ff4455;
+      --blue:    #4488ff;
+      --yellow:  #ffcc44;
+      --gray:    #666;
+      --text:    #e0e0e0;
+      --font:    'Courier New', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 12px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .header h1 { color: #fff; font-size: 16px; letter-spacing: 2px; }
+    .ts { color: var(--gray); font-size: 11px; }
+
+    /* ── Stat boxes ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .stat-box .label { color: var(--gray); font-size: 10px; margin-bottom: 4px; }
+    .stat-box .value { font-size: 18px; font-weight: bold; }
+
+    /* ── Chart ── */
+    .chart-wrapper {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+    .chart-title {
+      color: var(--gray);
+      font-size: 11px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #tradingview-chart { width: 100%; height: 420px; }
+
+    /* ── Two columns ── */
+    .cols-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .cols-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .panel-title {
+      color: var(--yellow);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+
+    /* ── Equity curve ── */
+    #equity-canvas { width: 100%; height: 160px; }
+
+    /* ── Audit cards ── */
+    .audit-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .audit-card.PERFECT_WIN   { border-color: #00ff88; }
+    .audit-card.WASTED_WIN    { border-color: #ffaa00; }
+    .audit-card.NOISE_STOP    { border-color: #ff8844; }
+    .audit-card.WRONG_DIR     { border-color: #ff4455; }
+    .audit-card.NORMAL_LOSS   { border-color: #444; }
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      margin-right: 4px;
+      font-weight: bold;
+    }
+    .tag-win    { background: #003322; color: #00ff88; }
+    .tag-loss   { background: #220011; color: #ff4455; }
+    .tag-class  { background: #222200; color: #ffaa00; }
+    .metric {
+      display: inline-block;
+      margin-right: 10px;
+      color: var(--gray);
+    }
+    .metric span { color: var(--text); }
+
+    /* ── Council log ── */
+    .council-entry {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0;
+      font-size: 11px;
+    }
+    .council-signal { font-size: 13px; font-weight: bold; margin-right: 8px; }
+    .sig-buy    { color: var(--green); }
+    .sig-sell   { color: var(--red); }
+    .sig-wait   { color: var(--gray); }
+    .agent-line { color: #888; margin-top: 3px; }
+    .agent-name { font-weight: bold; }
+    .agent-impulse  { color: #ffaa00; }
+    .agent-trend    { color: #4488ff; }
+    .agent-analyst  { color: #cc88ff; }
+
+    /* ── Hourly heatmap ── */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 3px;
+      margin-top: 8px;
+    }
+    .hmap-cell {
+      border-radius: 3px;
+      padding: 4px 2px;
+      text-align: center;
+      font-size: 10px;
+      cursor: default;
+    }
+
+    /* ── Trade log ── */
+    .trade-row {
+      display: grid;
+      grid-template-columns: 90px 50px 60px 70px 70px 80px 1fr;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 11px;
+    }
+    .trade-row:hover { background: #1a1a1a; }
+
+    /* ── Alpha patterns ── */
+    .alpha-block {
+      background: #0a1a0a;
+      border: 1px solid #1a3a1a;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 11px;
+      color: #88cc88;
+      white-space: pre-wrap;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .custom-block {
+      background: #0a0a1a;
+      border: 1px solid #1a1a3a;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 11px;
+      color: #8888cc;
+      white-space: pre-wrap;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>⚡ ТРЕНЕР | 3865/97420 | 2022-05-03 13:45 | AI:1339 SKIP:1521</h1>
+    <span class="ts">Обновлено: 2026-03-07 09:47:13 | Auto-refresh: 5s</span>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="label">БАЛАНС</div>
+      <div class="value" style="color:#00ff88">$370.0</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">СДЕЛОК</div>
+      <div class="value">168</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">WIN / LOSS</div>
+      <div class="value">46 / 122</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">WINRATE</div>
+      <div class="value" style="color:#ff4444">27.4%</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">P&L</div>
+      <div class="value" style="color:#00ff88">$-630.00</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">P. FACTOR</div>
+      <div class="value">0.78</div>
+    </div>
+  </div>
+
+  <!-- MAIN CHART -->
+  <div class="chart-wrapper">
+    <div class="chart-title">📈 EURUSD — Японские свечи (M15) + Сделки</div>
+    <div id="tradingview-chart"></div>
+  </div>
+
+  <!-- EQUITY + HOURLY HEATMAP -->
+  <div class="cols-2">
+    <div class="panel">
+      <div class="panel-title">📉 Equity Curve</div>
+      <canvas id="equity-canvas"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🕐 Тепловая карта по часам (WR%)</div>
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+      <div style="margin-top:8px; font-size:10px; color:#666;">
+        Зелёный = WR≥60% | Красный = WR≤40% | Серый = мало данных
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIT + COUNCIL -->
+  <div class="cols-2">
+
+    <!-- AUDIT BLOCK -->
+    <div class="panel">
+      <div class="panel-title">🔍 ИИ-Аудитор (последние сделки)</div>
+      <div id="audit-cards">
+        
+        <div class="audit-card EFFICIENT_WIN">
+          <span class="tag tag-win">WIN</span>
+          <span class="tag tag-class">EFFICIENT_WIN</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:33</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#00ff88">$50.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить в сделку по тренду, пока индикатор RSI на коррекционном таймфрейме (M15) не покажет призн</span>
+        </div>
+
+        <div class="audit-card EFFICIENT_WIN">
+          <span class="tag tag-win">WIN</span>
+          <span class="tag tag-class">EFFICIENT_WIN</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:32</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#00ff88">$50.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Входить на продажу в понедельник в первые 15-30 минут после открытия Лондонской сессии, только если </span>
+        </div>
+
+        <div class="audit-card NORMAL_LOSS">
+          <span class="tag tag-loss">LOSS</span>
+          <span class="tag tag-class">NORMAL_LOSS</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:30</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#ff4455">$-25.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить по трендовой логике H4 в первые 2 часа Азиатской сессии без подтверждения импульса на M15</span>
+        </div>
+
+        <div class="audit-card EFFICIENT_WIN">
+          <span class="tag tag-win">WIN</span>
+          <span class="tag tag-class">EFFICIENT_WIN</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:09</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#00ff88">$50.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить в середине активной сессии (12:00-13:00 London) без подтверждения пробоя импульсной свечо</span>
+        </div>
+
+        <div class="audit-card NORMAL_LOSS">
+          <span class="tag tag-loss">LOSS</span>
+          <span class="tag tag-class">NORMAL_LOSS</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:08</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#ff4455">$-25.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить в новые сделки после 10:00 GMT в пятницу, за исключением случаев, когда позиция открывает</span>
+        </div>
+
+        <div class="audit-card NORMAL_LOSS">
+          <span class="tag tag-loss">LOSS</span>
+          <span class="tag tag-class">NORMAL_LOSS</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:05</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#ff4455">$-25.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 ставить SL не ближе чем 2×ATR от входа и избегать входов в период высокой микро-волатильности (первы</span>
+        </div>
+
+        <div class="audit-card NORMAL_LOSS">
+          <span class="tag tag-loss">LOSS</span>
+          <span class="tag tag-class">NORMAL_LOSS</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T09:02</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#ff4455">$-25.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить в сделку по основной валютной паре (EUR/USD, GBP/USD) в период азиатской сессии (22:00 - </span>
+        </div>
+
+        <div class="audit-card NORMAL_LOSS">
+          <span class="tag tag-loss">LOSS</span>
+          <span class="tag tag-class">NORMAL_LOSS</span>
+          <span style="color:#666; font-size:10px;">2026-03-07T08:59</span>
+          <br>
+          <span class="metric">P/L: <span style="color:#ff4455">$-25.0</span></span>
+          <span class="metric">MFE: <span>0.0p</span></span>
+          <span class="metric">MAE: <span>0.0p</span></span>
+          <span class="metric">Эфф: <span>0%</span></span>
+          <br><span style='color:#aaa; font-size:11px;'>📌 Не входить в сделку в период перекрытия сессий (после 15:30 Лондон) без подтверждения от минимум дву</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- COUNCIL LOG -->
+    <div class="panel">
+      <div class="panel-title">🧠 Консилиум (последние решения)</div>
+      <div id="council-log" style="max-height:320px; overflow-y:auto;">
+        
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 13:45</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 13:15</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 11:15</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">4/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 08:45</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">7/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 08:30</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 08:15</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 08:00</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">7/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 07:45</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 07:30</span>
+          
+          
+        </div>
+
+        <div class="council-entry">
+          <span class="council-signal sig-wait">WAIT</span>
+          <span style="color:#888">8/10</span>
+          <span style="color:#555; font-size:10px;"> — 2022-05-03 05:30</span>
+          
+          
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ALPHA PATTERNS + CUSTOM SIGNALS -->
+  <div class="cols-2" style="margin-bottom:12px;">
+    <div class="panel">
+      <div class="panel-title">🧬 Alpha Patterns (подтверждённые)</div>
+      <div class="alpha-block">=== ALPHA PATTERNS (ПОДТВЕРЖДЁННЫЕ ПАТТЕРНЫ) ===
+  [PAT_20260307_032519] BUY | London+NY | RSI≈None | Встреч: 4 | WR: 4/4 | —
+  [PAT_20260307_010401] SELL | London | RSI≈None | Встреч: 9 | WR: 9/9 | {"session": "London", "day_of_week": [2,3,4], "entry_hour_range": [8,12], "required_confirmation": "price_deviation_from
+  [PAT_20260307_021829] SELL | London Open | RSI≈None | Встреч: 4 | WR: 4/4 | ** {"session": "London Open", "trend_higher_tf": "DOWN", "entry_time_window": "07:15-07:45", "entry_type": "Sell on cont
+  [PAT_20260307_050605] SELL | London+NY | RSI≈None | Встреч: 5 | WR: 5/5 | {
+  [PAT_20260307_053516] SELL | Asia | RSI≈None | Встреч: 5 | WR: 5/5 | **</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">⚗️ Custom Indicators (PGI / TVA / CandleDNA)</div>
+      <div class="custom-block">=== CUSTOM INDICATORS (PGI / TVA / CandleDNA) ===
+  Вердикт: CUSTOM NEUTRAL
+  PGI Multi-TF: DIVERGED
+    M15: PGI=0.381 grad=-0.18 → LEAN_SELL
+    H1: PGI=0.557 grad=+0.48 → LEAN_BUY
+    H4: PGI=0.391 grad=+0.02 → NEUTRAL
+  TVA: Волатильность симметрична (×1.08) → NEUTRAL
+  CandleDNA: паттерн не распознан</div>
+    </div>
+  </div>
+
+  <!-- TIME PROFILE -->
+  <div class="panel" style="margin-bottom:12px;">
+    <div class="panel-title">⏱️ Временной профиль (прибыль по времени)</div>
+    <pre style="color:#aaa; font-size:11px; white-space:pre-wrap;">=== TEMPORAL TRADE PROFILE (последние 5 сделок) ===
+
+По часам (UTC):
+
+По дням недели:
+
+По торговым сессиям:
+  London+NY            сделок:3  WR:33%  P/L:$0.0
+  London Peak          сделок:2  WR:0%  P/L:$-10.0
+
+>>> РЕКОМЕНДАЦИИ ПО ВРЕМЕНИ:</pre>
+  </div>
+
+  <!-- TRADE LOG -->
+  <div class="panel">
+    <div class="panel-title">📋 Журнал сделок</div>
+    <div class="trade-row" style="color:#666; font-size:10px; border-bottom:1px solid #333;">
+      <span>ВРЕМЯ</span><span>ТИП</span><span>РЕЗУЛЬТАТ</span>
+      <span>P/L</span><span>MFE</span><span>MAE</span><span>КЛАСС / ПРАВИЛО</span>
+    </div>
+    
+        <div class="trade-row">
+          <span style="color:#666">2022-05-02T10:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">557.0p</span>
+          <span style="color:#ff8844">17.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в сделку по тренду, пока индикатор RSI на коррекц</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-05-02T09:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">556.0p</span>
+          <span style="color:#ff8844">200.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Входить на продажу в понедельник в первые 15-30 минут после </span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-05-02T06:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">141.0p</span>
+          <span style="color:#ff8844">277.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить по трендовой логике H4 в первые 2 часа Азиатской </span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-29T12:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">603.0p</span>
+          <span style="color:#ff8844">102.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в середине активной сессии (12:00-13:00 London) б</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-29T10:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">39.0p</span>
+          <span style="color:#ff8844">308.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в новые сделки после 10:00 GMT в пятницу, за искл</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-29T09:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">51.0p</span>
+          <span style="color:#ff8844">374.0p</span>
+          <span style="color:#888">NORMAL_LOSS ставить SL не ближе чем 2×ATR от входа и избегать входов в п</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T22:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">161.0p</span>
+          <span style="color:#ff8844">264.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку по основной валютной паре (EUR/USD, GBP/</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T16:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">168.0p</span>
+          <span style="color:#ff8844">324.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку в период перекрытия сессий (после 15:30 </span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T12:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">613.0p</span>
+          <span style="color:#ff8844">60.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Входить только при подтверждении импульса в направлении сдел</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T11:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">573.0p</span>
+          <span style="color:#ff8844">100.0p</span>
+          <span style="color:#888">EFFICIENT_WIN ** **Не входить** в сделку, если не рассчитан и не учтен тек</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T11:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">505.0p</span>
+          <span style="color:#ff8844">4.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в позицию, если в течение первых 3 минут после от</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T09:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-10.00</span>
+          <span style="color:#4488ff">44.0p</span>
+          <span style="color:#ff8844">158.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить на London Open (09:00-10:00) без предварительного</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T08:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">191.0p</span>
+          <span style="color:#ff8844">296.0p</span>
+          <span style="color:#888">NORMAL_LOSS **</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T05:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$20.00</span>
+          <span style="color:#4488ff">241.0p</span>
+          <span style="color:#ff8844">33.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в начале азиатской сессии (04:00-06:00 GMT) без п</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T03:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">644.0p</span>
+          <span style="color:#ff8844">69.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в сделку SELL по EURUSD в азиатскую сессию без по</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-28T03:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">646.0p</span>
+          <span style="color:#ff8844">67.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в азиатскую сессию (03:00–06:00) при отсутствии п</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T22:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">525.0p</span>
+          <span style="color:#ff8844">49.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в азиатскую сессию без подтверждения RSI (для про</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T21:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">526.0p</span>
+          <span style="color:#ff8844">44.0p</span>
+          <span style="color:#888">EFFICIENT_WIN </span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T17:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-10.00</span>
+          <span style="color:#4488ff">21.0p</span>
+          <span style="color:#ff8844">104.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку на продолжении тренда, если цена находит</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T16:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">662.0p</span>
+          <span style="color:#ff8844">240.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Входить с гибким TP: 50% позиции закрывать при достижении 25</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T16:15</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">245.0p</span>
+          <span style="color:#ff8844">270.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку, если первые 2-3 свечи после входа не да</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T15:30</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">522.0p</span>
+          <span style="color:#ff8844">173.0p</span>
+          <span style="color:#888">EFFICIENT_WIN ** Не входить в сделку, если цена не проходит в сторону пози</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T10:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">646.0p</span>
+          <span style="color:#ff8844">55.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в сделку, если RSI (14) > 45 при продаже на нисхо</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T05:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-10.00</span>
+          <span style="color:#4488ff">7.0p</span>
+          <span style="color:#ff8844">109.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку в азиатскую сессию, если ATR за последни</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-27T05:00</span>
+          <span style="color:#00ff88">BUY</span>
+          <span style="color:#ff4455">LOSS</span>
+          <span style="color:#ff4455">$-25.00</span>
+          <span style="color:#4488ff">33.0p</span>
+          <span style="color:#ff8844">305.0p</span>
+          <span style="color:#888">NORMAL_LOSS Не входить в сделку по EURUSD с 02:00 до 07:00 по серверному</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-26T18:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">707.0p</span>
+          <span style="color:#ff8844">57.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Входить в сделку только при подтверждении от консилиума ИИ (</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-26T17:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">618.0p</span>
+          <span style="color:#ff8844">146.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить на открытии ключевой сессии без подтверждения RSI</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-26T16:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">536.0p</span>
+          <span style="color:#ff8844">31.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Не входить в позицию, если в течение первых 3-5 минут после </span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-26T15:45</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">579.0p</span>
+          <span style="color:#ff8844">66.0p</span>
+          <span style="color:#888">EFFICIENT_WIN ** Входить только при подтверждении импульса по ATR (ATR > с</span>
+        </div>
+
+        <div class="trade-row">
+          <span style="color:#666">2022-04-26T11:00</span>
+          <span style="color:#ff4455">SELL</span>
+          <span style="color:#00ff88">WIN</span>
+          <span style="color:#00ff88">$50.00</span>
+          <span style="color:#4488ff">579.0p</span>
+          <span style="color:#ff8844">186.0p</span>
+          <span style="color:#888">EFFICIENT_WIN Входить в сделку только после подтверждающего сигнала (напри</span>
+        </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script>
+  // ══════════════════════════════════════════
+  //  TRADINGVIEW LIGHTWEIGHT CHARTS
+  // ══════════════════════════════════════════
+  (function() {
+    const el = document.getElementById('tradingview-chart');
+    const chart = LightweightCharts.createChart(el, {
+      layout: {
+        background: { color: '#0d0d0d' },
+        textColor:  '#888',
+      },
+      grid: {
+        vertLines: { color: '#1a1a1a' },
+        horzLines: { color: '#1a1a1a' },
+      },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#333' },
+      timeScale: {
+        borderColor: '#333',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor:   '#00ff88',
+      downColor: '#ff4455',
+      borderUpColor:   '#00ff88',
+      borderDownColor: '#ff4455',
+      wickUpColor:   '#00aa55',
+      wickDownColor: '#cc2233',
+    });
+
+    const candles = [{"time": 1651493700, "open": 1.05232, "high": 1.05271, "low": 1.05213, "close": 1.05263}, {"time": 1651494600, "open": 1.05263, "high": 1.05268, "low": 1.05182, "close": 1.05232}, {"time": 1651495500, "open": 1.05231, "high": 1.05269, "low": 1.05194, "close": 1.05262}, {"time": 1651496400, "open": 1.05263, "high": 1.05279, "low": 1.05192, "close": 1.05198}, {"time": 1651497300, "open": 1.05198, "high": 1.05245, "low": 1.05192, "close": 1.05213}, {"time": 1651498200, "open": 1.05213, "high": 1.05285, "low": 1.05192, "close": 1.05237}, {"time": 1651499100, "open": 1.05236, "high": 1.05271, "low": 1.05208, "close": 1.05256}, {"time": 1651500000, "open": 1.05255, "high": 1.05262, "low": 1.0516, "close": 1.05236}, {"time": 1651500900, "open": 1.05237, "high": 1.05271, "low": 1.05204, "close": 1.05265}, {"time": 1651501800, "open": 1.05264, "high": 1.05269, "low": 1.05194, "close": 1.05199}, {"time": 1651502700, "open": 1.052, "high": 1.05234, "low": 1.05132, "close": 1.0516}, {"time": 1651503600, "open": 1.05159, "high": 1.05256, "low": 1.05157, "close": 1.0523}, {"time": 1651504500, "open": 1.05229, "high": 1.05294, "low": 1.05199, "close": 1.0529}, {"time": 1651505400, "open": 1.05291, "high": 1.05321, "low": 1.052, "close": 1.05245}, {"time": 1651506300, "open": 1.05245, "high": 1.05262, "low": 1.05079, "close": 1.05099}, {"time": 1651507200, "open": 1.051, "high": 1.05181, "low": 1.05098, "close": 1.05143}, {"time": 1651508100, "open": 1.05143, "high": 1.05145, "low": 1.05022, "close": 1.05054}, {"time": 1651509000, "open": 1.05053, "high": 1.05226, "low": 1.05048, "close": 1.05215}, {"time": 1651509900, "open": 1.05216, "high": 1.05272, "low": 1.05173, "close": 1.05231}, {"time": 1651510800, "open": 1.05234, "high": 1.05324, "low": 1.05143, "close": 1.05243}, {"time": 1651511700, "open": 1.05242, "high": 1.05346, "low": 1.05207, "close": 1.0533}, {"time": 1651512600, "open": 1.0533, "high": 1.0541, "low": 1.05292, "close": 1.05294}, {"time": 1651513500, "open": 1.05294, "high": 1.05327, "low": 1.05217, "close": 1.05217}, {"time": 1651514400, "open": 1.05219, "high": 1.05233, "low": 1.05033, "close": 1.05051}, {"time": 1651515300, "open": 1.05052, "high": 1.05076, "low": 1.05036, "close": 1.0506}, {"time": 1651516200, "open": 1.05061, "high": 1.05149, "low": 1.05044, "close": 1.0514}, {"time": 1651517100, "open": 1.0514, "high": 1.05209, "low": 1.05108, "close": 1.05208}, {"time": 1651518000, "open": 1.05207, "high": 1.05232, "low": 1.052, "close": 1.0521}, {"time": 1651518900, "open": 1.0521, "high": 1.05252, "low": 1.05203, "close": 1.05239}, {"time": 1651519800, "open": 1.05239, "high": 1.05256, "low": 1.0511, "close": 1.05153}, {"time": 1651520700, "open": 1.05157, "high": 1.05217, "low": 1.05016, "close": 1.05082}, {"time": 1651521600, "open": 1.05083, "high": 1.051, "low": 1.0501, "close": 1.05028}, {"time": 1651522500, "open": 1.05028, "high": 1.05075, "low": 1.05024, "close": 1.05057}, {"time": 1651523400, "open": 1.05056, "high": 1.05066, "low": 1.05004, "close": 1.05009}, {"time": 1651524300, "open": 1.0501, "high": 1.05013, "low": 1.04922, "close": 1.04923}, {"time": 1651525200, "open": 1.04924, "high": 1.04963, "low": 1.04895, "close": 1.049}, {"time": 1651526100, "open": 1.049, "high": 1.04979, "low": 1.049, "close": 1.04978}, {"time": 1651527000, "open": 1.04977, "high": 1.0499, "low": 1.04937, "close": 1.0494}, {"time": 1651527900, "open": 1.04941, "high": 1.04987, "low": 1.04908, "close": 1.04913}, {"time": 1651528800, "open": 1.04912, "high": 1.0498, "low": 1.04908, "close": 1.0497}, {"time": 1651529700, "open": 1.04969, "high": 1.05097, "low": 1.04964, "close": 1.05061}, {"time": 1651530600, "open": 1.05062, "high": 1.05108, "low": 1.05009, "close": 1.05019}, {"time": 1651531500, "open": 1.05018, "high": 1.0509, "low": 1.05018, "close": 1.05036}, {"time": 1651532400, "open": 1.05035, "high": 1.0506, "low": 1.05008, "close": 1.05029}, {"time": 1651533300, "open": 1.05029, "high": 1.05058, "low": 1.05011, "close": 1.05029}, {"time": 1651534200, "open": 1.05029, "high": 1.05063, "low": 1.05021, "close": 1.05058}, {"time": 1651535100, "open": 1.05057, "high": 1.05076, "low": 1.05054, "close": 1.05071}, {"time": 1651537800, "open": 1.05034, "high": 1.05064, "low": 1.05008, "close": 1.05026}, {"time": 1651538700, "open": 1.05031, "high": 1.05048, "low": 1.05019, "close": 1.05045}, {"time": 1651539600, "open": 1.05044, "high": 1.05116, "low": 1.05044, "close": 1.05114}, {"time": 1651540500, "open": 1.05115, "high": 1.05129, "low": 1.05095, "close": 1.05123}, {"time": 1651541400, "open": 1.05122, "high": 1.05122, "low": 1.05081, "close": 1.05095}, {"time": 1651542300, "open": 1.05095, "high": 1.05121, "low": 1.05093, "close": 1.05094}, {"time": 1651543200, "open": 1.05095, "high": 1.05102, "low": 1.05062, "close": 1.05068}, {"time": 1651544100, "open": 1.05068, "high": 1.05074, "low": 1.05055, "close": 1.05071}, {"time": 1651545000, "open": 1.05071, "high": 1.05083, "low": 1.05068, "close": 1.05074}, {"time": 1651545900, "open": 1.05074, "high": 1.05092, "low": 1.05072, "close": 1.05092}, {"time": 1651546800, "open": 1.05091, "high": 1.05133, "low": 1.05089, "close": 1.05117}, {"time": 1651547700, "open": 1.05114, "high": 1.05115, "low": 1.05079, "close": 1.05094}, {"time": 1651548600, "open": 1.05094, "high": 1.05195, "low": 1.05092, "close": 1.05185}, {"time": 1651549500, "open": 1.05185, "high": 1.05253, "low": 1.05181, "close": 1.05246}, {"time": 1651550400, "open": 1.05245, "high": 1.0526, "low": 1.05186, "close": 1.05186}, {"time": 1651551300, "open": 1.05186, "high": 1.052, "low": 1.05156, "close": 1.05165}, {"time": 1651552200, "open": 1.05165, "high": 1.05177, "low": 1.05143, "close": 1.05151}, {"time": 1651553100, "open": 1.05151, "high": 1.05228, "low": 1.05148, "close": 1.05216}, {"time": 1651554000, "open": 1.05216, "high": 1.05241, "low": 1.05211, "close": 1.05225}, {"time": 1651554900, "open": 1.05226, "high": 1.05251, "low": 1.05224, "close": 1.05241}, {"time": 1651555800, "open": 1.05241, "high": 1.05241, "low": 1.05141, "close": 1.05151}, {"time": 1651556700, "open": 1.05151, "high": 1.05162, "low": 1.05093, "close": 1.05129}, {"time": 1651557600, "open": 1.05129, "high": 1.05129, "low": 1.05071, "close": 1.05116}, {"time": 1651558500, "open": 1.05116, "high": 1.05167, "low": 1.05116, "close": 1.05164}, {"time": 1651559400, "open": 1.05163, "high": 1.05164, "low": 1.05133, "close": 1.05136}, {"time": 1651560300, "open": 1.05136, "high": 1.05188, "low": 1.05135, "close": 1.05178}, {"time": 1651561200, "open": 1.05178, "high": 1.05179, "low": 1.05137, "close": 1.05155}, {"time": 1651562100, "open": 1.05155, "high": 1.05164, "low": 1.05143, "close": 1.05144}, {"time": 1651563000, "open": 1.05144, "high": 1.05234, "low": 1.05096, "close": 1.05107}, {"time": 1651563900, "open": 1.05107, "high": 1.05123, "low": 1.05013, "close": 1.05013}, {"time": 1651564800, "open": 1.05014, "high": 1.05069, "low": 1.04993, "close": 1.05062}, {"time": 1651565700, "open": 1.05064, "high": 1.05099, "low": 1.05059, "close": 1.05073}, {"time": 1651566600, "open": 1.05073, "high": 1.05089, "low": 1.05018, "close": 1.05026}, {"time": 1651567500, "open": 1.05024, "high": 1.05078, "low": 1.04971, "close": 1.05069}, {"time": 1651568400, "open": 1.05068, "high": 1.0508, "low": 1.05009, "close": 1.0503}, {"time": 1651569300, "open": 1.05029, "high": 1.05042, "low": 1.04974, "close": 1.05008}, {"time": 1651570200, "open": 1.05008, "high": 1.05116, "low": 1.05004, "close": 1.05053}, {"time": 1651571100, "open": 1.05053, "high": 1.05077, "low": 1.04957, "close": 1.04972}, {"time": 1651572000, "open": 1.04971, "high": 1.05053, "low": 1.04937, "close": 1.05043}, {"time": 1651572900, "open": 1.05042, "high": 1.05168, "low": 1.05015, "close": 1.05153}, {"time": 1651573800, "open": 1.05154, "high": 1.05271, "low": 1.05136, "close": 1.05206}, {"time": 1651574700, "open": 1.05204, "high": 1.05265, "low": 1.0514, "close": 1.0518}, {"time": 1651575600, "open": 1.05181, "high": 1.05251, "low": 1.05181, "close": 1.05197}, {"time": 1651576500, "open": 1.05199, "high": 1.05218, "low": 1.05136, "close": 1.05141}, {"time": 1651577400, "open": 1.0514, "high": 1.05161, "low": 1.05014, "close": 1.05057}, {"time": 1651578300, "open": 1.05057, "high": 1.05096, "low": 1.04995, "close": 1.04995}, {"time": 1651579200, "open": 1.04994, "high": 1.05038, "low": 1.04915, "close": 1.04955}, {"time": 1651580100, "open": 1.04954, "high": 1.05016, "low": 1.04941, "close": 1.04968}, {"time": 1651581000, "open": 1.04967, "high": 1.05084, "low": 1.04954, "close": 1.0505}, {"time": 1651581900, "open": 1.05051, "high": 1.05133, "low": 1.05045, "close": 1.05129}, {"time": 1651582800, "open": 1.0513, "high": 1.05157, "low": 1.05092, "close": 1.05157}, {"time": 1651583700, "open": 1.05157, "high": 1.05224, "low": 1.05141, "close": 1.05149}, {"time": 1651584600, "open": 1.05148, "high": 1.05148, "low": 1.05066, "close": 1.05071}, {"time": 1651585500, "open": 1.05072, "high": 1.05082, "low": 1.05012, "close": 1.05033}];
+    if (candles.length > 0) {
+      candleSeries.setData(candles);
+    }
+
+    // Маркеры сделок
+    const markers = [{"time": 1650494700, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1650495600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1650509100, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1650524400, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650526200, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650527100, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650528000, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650528900, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650531600, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650533400, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 9"}, {"time": 1650535200, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 7"}, {"time": 1650538800, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650540600, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650548700, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 7"}, {"time": 1650549600, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 7"}, {"time": 1650555900, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 8"}, {"time": 1650590100, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1650612600, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 7"}, {"time": 1650644100, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 6"}, {"time": 1650897000, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1650960000, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1650977100, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1650980700, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1650984300, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1650987900, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651024800, "position": "belowBar", "color": "#00ff88", "shape": "arrowUp", "text": "BUY 6"}, {"time": 1651027500, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1651042800, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1651062600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651065300, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651067100, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651068000, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1651084200, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651086900, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651104900, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651105800, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 8"}, {"time": 1651111200, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651122900, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 8"}, {"time": 1651125600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651133700, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651134600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651137300, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 8"}, {"time": 1651152600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651174200, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 5"}, {"time": 1651213800, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651218300, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651222800, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 6"}, {"time": 1651463100, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651473900, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}, {"time": 1651476600, "position": "aboveBar", "color": "#ff4455", "shape": "arrowDown", "text": "SELL 7"}];
+    if (markers.length > 0) {
+      candleSeries.setMarkers(markers);
+    }
+
+    // Авторесайз
+    new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
+      .observe(el);
+  })();
+
+  // ══════════════════════════════════════════
+  //  EQUITY CURVE (Canvas)
+  // ══════════════════════════════════════════
+  (function() {
+    const canvas = document.getElementById('equity-canvas');
+    const ctx    = canvas.getContext('2d');
+    const equity = [0.0, -25.0, -50.0, -75.0, -100.0, -125.0, -150.0, -175.0, -200.0, -225.0, -250.0, -260.0, -285.0, -310.0, -335.0, -360.0, -370.0, -320.0, -345.0, -370.0, -395.0, -345.0, -295.0, -245.0, -195.0, -145.0, -170.0, -180.0, -130.0, -80.0, -105.0, -55.0, -65.0, -15.0, 35.0, 85.0, 135.0, 155.0, 130.0, 120.0, 170.0, 220.0, 270.0, 245.0, 220.0, 195.0, 170.0, 220.0, 195.0, 245.0, 295.0];
+    if (!equity || equity.length < 2) {
+      ctx.fillStyle = '#444';
+      ctx.font = '12px monospace';
+      ctx.fillText('Нет данных', 10, 80);
+      return;
+    }
+    canvas.width  = canvas.offsetWidth || 400;
+    canvas.height = 160;
+    const W = canvas.width, H = canvas.height;
+    const pad = 30;
+    const min_v = Math.min(...equity);
+    const max_v = Math.max(...equity);
+    const range = max_v - min_v || 1;
+
+    function toX(i) { return pad + (i / (equity.length - 1)) * (W - pad * 2); }
+    function toY(v) { return H - pad - ((v - min_v) / range) * (H - pad * 2); }
+
+    // Нулевая линия
+    const zeroY = toY(0);
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, zeroY); ctx.lineTo(W - pad, zeroY); ctx.stroke();
+
+    // Кривая
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    equity.forEach((v, i) => {
+      ctx.strokeStyle = v >= 0 ? '#00ff88' : '#ff4455';
+      if (i === 0) ctx.moveTo(toX(i), toY(v));
+      else ctx.lineTo(toX(i), toY(v));
+    });
+    ctx.stroke();
+
+    // Последнее значение
+    const last = equity[equity.length - 1];
+    ctx.fillStyle = last >= 0 ? '#00ff88' : '#ff4455';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText('$' + last.toFixed(2), W - 80, 20);
+  })();
+
+  // ══════════════════════════════════════════
+  //  HEATMAP ПО ЧАСАМ
+  // ══════════════════════════════════════════
+  (function() {
+    const grid    = document.getElementById('heatmap-grid');
+    const hourly  = {"0": {"total": 0, "wr": 50}, "1": {"total": 1, "wr": 0.0}, "2": {"total": 1, "wr": 0.0}, "3": {"total": 2, "wr": 100.0}, "4": {"total": 1, "wr": 100.0}, "5": {"total": 4, "wr": 25.0}, "6": {"total": 1, "wr": 0.0}, "7": {"total": 0, "wr": 50}, "8": {"total": 1, "wr": 0.0}, "9": {"total": 3, "wr": 33.33333333333333}, "10": {"total": 7, "wr": 28.57142857142857}, "11": {"total": 5, "wr": 60.0}, "12": {"total": 4, "wr": 50.0}, "13": {"total": 1, "wr": 0.0}, "14": {"total": 2, "wr": 0.0}, "15": {"total": 2, "wr": 100.0}, "16": {"total": 5, "wr": 40.0}, "17": {"total": 4, "wr": 25.0}, "18": {"total": 2, "wr": 50.0}, "19": {"total": 1, "wr": 0.0}, "20": {"total": 0, "wr": 50}, "21": {"total": 1, "wr": 100.0}, "22": {"total": 2, "wr": 50.0}, "23": {"total": 0, "wr": 50}};
+
+    for (let h = 0; h < 24; h++) {
+      const cell  = document.createElement('div');
+      cell.classList.add('hmap-cell');
+      const d = hourly[h];
+      if (!d || d.total < 2) {
+        cell.style.background = '#1a1a1a';
+        cell.style.color = '#444';
+        cell.innerHTML = `<div>${h}</div><div>—</div>`;
+      } else {
+        const wr = d.wr;
+        const r  = Math.round(255 * (1 - wr / 100));
+        const g  = Math.round(200 * (wr / 100));
+        cell.style.background = `rgba(${r},${g},30,0.5)`;
+        cell.style.color = '#fff';
+        cell.innerHTML = `<div>${h}h</div><div>${Math.round(wr)}%</div>`;
+        cell.title = `${h}:00 | WR ${wr.toFixed(1)}% | ${d.total} сделок`;
+      }
+      grid.appendChild(cell);
+    }
+  })();
+  </script>
+</body>
+</html>
